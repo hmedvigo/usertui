@@ -1,8 +1,12 @@
 # usertui
 
 A professional terminal user interface (TUI) designed to streamline Linux identity and access management. 
-
 `usertui` acts as an intuitive wrapper around native Linux command-line utilities, allowing sysadmins to safely manage the user lifecycle, group assignments, and security privileges from a single interface.
+
+
+<p align="center">
+  <img src="snapshots/usertui_init.png" alt="usertui main menu" width="600">
+</p>
 
 ## Features
 

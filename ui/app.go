@@ -6,15 +6,16 @@ import (
 )
 
 type AppContext struct {
-	App        *tview.Application
-	MainGrid   *tview.Grid
-	InnerFlex  *tview.Flex
-	HeaderTabs *tview.Flex
-	UsersBtn   *tview.Button
-	GroupsBtn  *tview.Button
-	BodyPages  *tview.Pages
-	CurrentTab int
-	UsersPanel *UsersTabPanel
+	App         *tview.Application
+	MainGrid    *tview.Grid
+	InnerFlex   *tview.Flex
+	HeaderTabs  *tview.Flex
+	UsersBtn    *tview.Button
+	GroupsBtn   *tview.Button
+	BodyPages   *tview.Pages
+	CurrentTab  int
+	UsersPanel  *TabPanel
+	GroupsPanel *TabPanel
 }
 
 func NewApp() *AppContext {
@@ -38,24 +39,24 @@ func NewApp() *AppContext {
 
 func (ctx *AppContext) setupLayout() {
 	// RETRO FIX: True matrix black backgrounds with classic phosphor green borders
-	ctx.UsersPanel = NewUsersTabPanel(
+	ctx.UsersPanel = NewTabPanel("users",
 		func(actionIdx int) {
-			// Triggered when user hits <Proceed to Action>
-			// Inside here, you will route to sub-panels (e.g., actual create user forms)
+			// Handle user action
 		},
 		func() {
-			// Triggered when user hits <Cancel>
 			ctx.App.Stop()
 		},
 	)
-	groupsPlaceholder := tview.NewBox().
-		SetTitle(" [ GROUPS PANEL ] ").
-		SetBorder(true).
-		SetBorderColor(tcell.ColorGreen).
-		SetBackgroundColor(tcell.ColorBlack)
-
+	ctx.GroupsPanel = NewTabPanel("groups",
+		func(actionIdx int) {
+			// Handle group action
+		},
+		func() {
+			ctx.App.Stop()
+		},
+	)
 	ctx.BodyPages.AddPage("users", ctx.UsersPanel.MainFlex, true, true)
-	ctx.BodyPages.AddPage("groups", groupsPlaceholder, true, false)
+	ctx.BodyPages.AddPage("groups", ctx.GroupsPanel.MainFlex, true, false)
 
 	ctx.UsersBtn.SetSelectedFunc(func() {
 		ctx.CurrentTab = 0
@@ -84,7 +85,6 @@ func (ctx *AppContext) setupLayout() {
 		SetRows(0, 22, 0).
 		AddItem(ctx.InnerFlex, 1, 1, 1, 1, 0, 0, true)
 }
-
 func (ctx *AppContext) TabVisuals() {
 
 	activeStyle := tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorGreen)
@@ -114,75 +114,135 @@ func (ctx *AppContext) TabVisuals() {
 			ctx.App.SetFocus(ctx.UsersPanel.List)
 			ctx.UsersPanel.List.SetCurrentItem(0) // Reset to first item
 		}
-	} else {
-
-		ctx.App.SetFocus(ctx.GroupsBtn)
+	}
+	if ctx.CurrentTab == 1 {
+		if ctx.GroupsPanel != nil && ctx.GroupsPanel.List != nil {
+			ctx.App.SetFocus(ctx.GroupsPanel.List)
+			ctx.GroupsPanel.List.SetCurrentItem(0) // Reset to first item
+		}
 	}
 }
 func (ctx *AppContext) setupKeybindings() {
 	ctx.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		currentFocus := ctx.App.GetFocus()
-		// 1. If the user is viewing the Users tab panel layout
-		if ctx.CurrentTab == 0 && ctx.UsersPanel != nil {
-			proceedBtn := ctx.UsersPanel.Buttons.GetItem(1)
-			cancelBtn := ctx.UsersPanel.Buttons.GetItem(3)
-			currIdx := ctx.UsersPanel.List.GetCurrentItem()
-			maxIdx := ctx.UsersPanel.List.GetItemCount() - 1
 
-			// Fix 3: Intercept Up arrow actions on empty spacer lines
-			if event.Key() == tcell.KeyUp {
-				if currentFocus == ctx.UsersPanel.List {
-					if currIdx == 0 {
-						return nil
-					} else if currIdx%2 == 0 {
-						ctx.UsersPanel.List.SetCurrentItem(currIdx - 2)
-						return nil
-					}
-				} else if currentFocus == proceedBtn || currentFocus == cancelBtn {
-					ctx.UsersPanel.List.SetCurrentItem(maxIdx)
-					ctx.App.SetFocus(ctx.UsersPanel.List)
-					return nil
-				}
-			}
-			// Route Down arrow away from the List onto the Proceed button
-			if event.Key() == tcell.KeyDown {
-				if currentFocus == ctx.UsersPanel.List {
-					if currIdx == maxIdx {
-						ctx.App.SetFocus(proceedBtn)
-						return nil
-					} else if currIdx%2 == 0 {
-						ctx.UsersPanel.List.SetCurrentItem(currIdx + 2)
-						return nil
-					}
-				}
-			}
-
-			// Route LEFT and RIGHT arrow keys horizontally across the button strip
-			if event.Key() == tcell.KeyRight && currentFocus == proceedBtn {
-				ctx.App.SetFocus(cancelBtn)
-				return nil
-			}
-			if event.Key() == tcell.KeyLeft && currentFocus == cancelBtn {
-				ctx.App.SetFocus(proceedBtn)
-				return nil
+		activePanel := ctx.getActivePanel()
+		if activePanel != nil {
+			// handlePanelNavigation returns true if it consumed the event
+			if ctx.handlePanelNavigation(event, currentFocus, activePanel) {
+				return nil // Event was consumed, stop processing
 			}
 		}
 
 		// Tab Navigation Processing
 		if event.Key() == tcell.KeyTab {
 			ctx.CurrentTab = (ctx.CurrentTab + 1) % 2
-			if ctx.CurrentTab == 0 {
-				ctx.BodyPages.SwitchToPage("users")
-			} else {
-				ctx.BodyPages.SwitchToPage("groups")
-			}
-			ctx.TabVisuals()
+			ctx.switchTab(ctx.CurrentTab)
 			return nil
 		}
 
 		// CRUCIAL FIX: Let UP/DOWN keys pass through so tview can scroll list items
 		return event
 	})
+}
+func (ctx *AppContext) getActivePanel() *TabPanel {
+	switch ctx.CurrentTab {
+	case 0:
+		return ctx.UsersPanel
+	case 1:
+		return ctx.GroupsPanel
+	default:
+		return nil
+	}
+}
+func (ctx *AppContext) switchTab(tabIndex int) {
+	switch tabIndex {
+	case 0:
+		ctx.BodyPages.SwitchToPage("users")
+	case 1:
+		ctx.BodyPages.SwitchToPage("groups")
+	}
+	ctx.TabVisuals()
+}
+func (ctx *AppContext) handlePanelNavigation(event *tcell.EventKey, currentFocus tview.Primitive, panel *TabPanel) bool {
+	// Guard clause: make sure event isn't nil before doing anything
+	if event == nil {
+		return false
+	}
+
+	// Get button references
+	proceedBtn := panel.Buttons.GetItem(1)
+	cancelBtn := panel.Buttons.GetItem(3)
+	currIdx := panel.List.GetCurrentItem()
+	maxIdx := panel.List.GetItemCount() - 1
+
+	// Find the last selectable item (even index)
+	lastSelectable := maxIdx
+	if lastSelectable%2 != 0 {
+		lastSelectable--
+	}
+	// Using a switch statement prevents multiple blocks from running sequentially
+	switch event.Key() {
+	case tcell.KeyUp:
+		if currentFocus == panel.List {
+			if currIdx == 0 {
+				return true
+			}
+
+			// Move to previous selectable item
+			newIdx := currIdx - 1
+			if newIdx%2 != 0 {
+				newIdx--
+			}
+			if newIdx >= 0 {
+				panel.List.SetCurrentItem(newIdx)
+			}
+			return true
+		} else if currentFocus == proceedBtn || currentFocus == cancelBtn {
+			// Move focus to list and set to last selectable item
+			panel.List.SetCurrentItem(lastSelectable)
+			ctx.App.SetFocus(panel.List)
+			// Force redraw of the list to show selection
+			panel.List.SetSelectedBackgroundColor(tcell.ColorGreen)
+			return true
+		}
+
+	case tcell.KeyDown:
+
+		if currentFocus == panel.List {
+			if currIdx == lastSelectable {
+				// Move focus to proceed button, but keep the list selection visible
+				ctx.App.SetFocus(proceedBtn)
+				// Keep the current item highlighted by not changing it
+				return true
+			}
+
+			// Move to next selectable item
+			newIdx := currIdx + 1
+			if newIdx%2 != 0 {
+				newIdx++
+			}
+			if newIdx <= maxIdx {
+				panel.List.SetCurrentItem(newIdx)
+			}
+			return true
+		}
+
+	case tcell.KeyRight:
+		if currentFocus == proceedBtn {
+			ctx.App.SetFocus(cancelBtn)
+			return true
+		}
+
+	case tcell.KeyLeft:
+		if currentFocus == cancelBtn {
+			ctx.App.SetFocus(proceedBtn)
+			return true
+		}
+	default:
+		return false
+	}
+	return false
 }
 
 func (ctx *AppContext) Run() error {

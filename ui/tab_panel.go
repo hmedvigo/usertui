@@ -7,29 +7,31 @@ import (
 	"github.com/rivo/tview"
 )
 
-type UsersTabPanel struct {
+type TabPanel struct {
 	MainFlex    *tview.Flex
 	List        *tview.List
 	Buttons     *tview.Flex
 	ConfirmedId int
+	PanelType   string
 }
 
-func NewUsersTabPanel(onProceed func(actionIdx int), onCancel func()) *UsersTabPanel {
-	panel := &UsersTabPanel{
+type PanelConfig struct {
+	Title   string
+	Options []string
+}
+
+func NewTabPanel(panelType string, onProceed func(actionIdx int), onCancel func()) *TabPanel {
+	config := getPanelConfig(panelType)
+	panel := &TabPanel{
 		MainFlex:    tview.NewFlex().SetDirection(tview.FlexRow),
 		List:        tview.NewList(),
 		Buttons:     tview.NewFlex().SetDirection(tview.FlexColumn),
 		ConfirmedId: 0,
-	}
-
-	options := []string{
-		"Create New System User Account",
-		"Modify / Edit Existing User Account",
-		"Delete User Account From System",
-		"View / Search Comprehensive User Directory",
+		PanelType:   panelType,
 	}
 
 	// Helper function to render a line mimicking a retro radio button state
+	// MOVE THIS HELPER FUNCTION LATER!!!!
 	getOptionLabel := func(idx int, text string) string {
 		prefix := "( )"
 		if idx == panel.ConfirmedId {
@@ -40,24 +42,23 @@ func NewUsersTabPanel(onProceed func(actionIdx int), onCancel func()) *UsersTabP
 	}
 	// Turn off secondary text so each option takes exactly 1 row of screen height
 	panel.List.ShowSecondaryText(false)
-	panel.List.SetCurrentItem(0)
 
-	// Fix 2: Build spacing rows into the list layout to expand vertical item height
-	for i, opt := range options {
+	// Build spacing rows into the list layout to expand vertical item height
+	for i, opt := range config.Options {
 		panel.List.AddItem(getOptionLabel(i, opt), "", 0, nil)
-		if i < len(options)-1 {
+		if i < len(config.Options)-1 {
 			// Add an unselectable blank row as a layout padding spacer
 			panel.List.AddItem("", "", 0, nil)
 		}
 	}
-
+	// Nothing happens when navigating up and down
 	panel.List.SetChangedFunc(nil)
 	// Update brackets indicator whenever the user shifts focus with Up/Down arrows
 	panel.List.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		if index%2 == 0 { // Ensure it's a real item row
 			panel.ConfirmedId = index / 2
 			// Redraw all items to move the (*)
-			for i, opt := range options {
+			for i, opt := range config.Options {
 				panel.List.SetItemText(i*2, getOptionLabel(i, opt), "")
 			}
 		}
@@ -69,7 +70,7 @@ func NewUsersTabPanel(onProceed func(actionIdx int), onCancel func()) *UsersTabP
 			curr := panel.List.GetCurrentItem()
 			if curr%2 == 0 {
 				panel.ConfirmedId = curr / 2
-				for i, opt := range options {
+				for i, opt := range config.Options {
 					panel.List.SetItemText(i*2, getOptionLabel(i, opt), "")
 				}
 			}
@@ -130,7 +131,7 @@ func NewUsersTabPanel(onProceed func(actionIdx int), onCancel func()) *UsersTabP
 	// Combine components into the container block
 	titleBox := tview.NewTextView().
 		SetTextColor(tcell.ColorDarkGreen).
-		SetText(" User Administration Actions:").
+		SetText(config.Title).
 		SetBackgroundColor(tcell.ColorBlack)
 
 	panel.MainFlex.SetBackgroundColor(tcell.ColorBlack)
@@ -142,4 +143,40 @@ func NewUsersTabPanel(onProceed func(actionIdx int), onCancel func()) *UsersTabP
 		AddItem(panel.Buttons, 1, 0, false)
 
 	return panel
+}
+func getPanelConfig(panelType string) PanelConfig {
+	switch panelType {
+	case "users":
+		return PanelConfig{
+			Title: "User Management Options",
+			Options: []string{
+				"Create New System User Account",
+				"Modify / Edit Existing User Account",
+				"Delete User Account From System",
+				"View / Search Comprehensive User Directory",
+				"View / Search  User Directory",
+				"View  Comprehensive User Directory",
+			},
+		}
+	case "groups":
+		return PanelConfig{
+			Title: " Group Administration Actions:",
+			Options: []string{
+				"Create New User Group",
+				"Modify / Edit Existing Group",
+				"Delete Group From System",
+				"View / Search Group Directory",
+				"Manage Group Memberships",
+			},
+		}
+	default:
+		return PanelConfig{
+			Title: " Administration Actions:",
+			Options: []string{
+				"Option 1",
+				"Option 2",
+				"Option 3",
+			},
+		}
+	}
 }

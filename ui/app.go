@@ -6,28 +6,30 @@ import (
 )
 
 type AppContext struct {
-	App         *tview.Application
-	MainGrid    *tview.Grid
-	InnerFlex   *tview.Flex
-	HeaderTabs  *tview.Flex
-	UsersBtn    *tview.Button
-	GroupsBtn   *tview.Button
-	BodyPages   *tview.Pages
-	CurrentTab  int
-	UsersPanel  *TabPanel
-	GroupsPanel *TabPanel
+	App          *tview.Application
+	MainGrid     *tview.Grid
+	InnerFlex    *tview.Flex
+	HeaderTabs   *tview.Flex
+	UsersBtn     *tview.Button
+	GroupsBtn    *tview.Button
+	BodyPages    *tview.Pages
+	CurrentTab   int
+	pageCreators map[string]func() tview.Primitive
+	UsersPanel   *TabPanel
+	GroupsPanel  *TabPanel
 }
 
 func NewApp() *AppContext {
 	ctx := &AppContext{
-		App:        tview.NewApplication(),
-		MainGrid:   tview.NewGrid(),
-		InnerFlex:  tview.NewFlex().SetDirection(tview.FlexRow),
-		HeaderTabs: tview.NewFlex().SetDirection(tview.FlexColumn),
-		UsersBtn:   tview.NewButton(" USERS "),
-		GroupsBtn:  tview.NewButton(" GROUPS "),
-		BodyPages:  tview.NewPages(),
-		CurrentTab: 0,
+		App:          tview.NewApplication(),
+		MainGrid:     tview.NewGrid(),
+		InnerFlex:    tview.NewFlex().SetDirection(tview.FlexRow),
+		HeaderTabs:   tview.NewFlex().SetDirection(tview.FlexColumn),
+		UsersBtn:     tview.NewButton(" USERS "),
+		GroupsBtn:    tview.NewButton(" GROUPS "),
+		BodyPages:    tview.NewPages(),
+		CurrentTab:   0,
+		pageCreators: make(map[string]func() tview.Primitive),
 	}
 
 	ctx.setupLayout()
@@ -38,10 +40,10 @@ func NewApp() *AppContext {
 }
 
 func (ctx *AppContext) setupLayout() {
-	// RETRO FIX: True matrix black backgrounds with classic phosphor green borders
 	ctx.UsersPanel = NewTabPanel("users",
 		func(actionIdx int) {
 			// Handle user action
+			ctx.forwardToUserAction(actionIdx)
 		},
 		func() {
 			ctx.App.Stop()
@@ -50,6 +52,7 @@ func (ctx *AppContext) setupLayout() {
 	ctx.GroupsPanel = NewTabPanel("groups",
 		func(actionIdx int) {
 			// Handle group action
+			ctx.forwardToGroupAction(actionIdx)
 		},
 		func() {
 			ctx.App.Stop()
@@ -84,6 +87,8 @@ func (ctx *AppContext) setupLayout() {
 		SetColumns(0, 70, 0).
 		SetRows(0, 22, 0).
 		AddItem(ctx.InnerFlex, 1, 1, 1, 1, 0, 0, true)
+
+	ctx.RegisterPage()
 }
 func (ctx *AppContext) TabVisuals() {
 
@@ -202,8 +207,6 @@ func (ctx *AppContext) handlePanelNavigation(event *tcell.EventKey, currentFocus
 			// Move focus to list and set to last selectable item
 			panel.List.SetCurrentItem(lastSelectable)
 			ctx.App.SetFocus(panel.List)
-			// Force redraw of the list to show selection
-			panel.List.SetSelectedBackgroundColor(tcell.ColorGreen)
 			return true
 		}
 
@@ -244,6 +247,83 @@ func (ctx *AppContext) handlePanelNavigation(event *tcell.EventKey, currentFocus
 	}
 	return false
 }
+func (ctx *AppContext) forwardToUserAction(actionIdx int) {
+	switch actionIdx {
+	case 0:
+		ctx.ShowPage("create_user")
+	case 1:
+		ctx.ShowPage("edit_user")
+	case 2:
+		ctx.ShowPage("delete_user")
+	case 3:
+		ctx.ShowPage("view_users")
+	}
+}
+func (ctx *AppContext) forwardToGroupAction(actionIdx int) {
+	switch actionIdx {
+	case 0:
+		ctx.ShowPage("create_group")
+	case 1:
+		ctx.ShowPage("edit_group")
+	case 2:
+		ctx.ShowPage("delete_group")
+	case 3:
+		ctx.ShowPage("view_groups")
+	case 4:
+		ctx.ShowPage("manage_members")
+	}
+}
+
+// RegisterPage connects a page with its corresponding function
+func (ctx *AppContext) RegisterPage() {
+	ctx.RegisterPageCreator("create_user", func() tview.Primitive {
+		return NewCreateUserPage(ctx).Flex
+	})
+	ctx.RegisterPageCreator("edit_user", func() tview.Primitive {
+		return tview.NewBox().SetTitle(" Edit User ").SetBorder(true)
+	})
+	ctx.RegisterPageCreator("delete_user", func() tview.Primitive {
+		return tview.NewBox().SetTitle(" Delete User ").SetBorder(true)
+	})
+	ctx.RegisterPageCreator("view_users", func() tview.Primitive {
+		return tview.NewBox().SetTitle(" View Users ").SetBorder(true)
+	})
+}
+
+// ShowPage Single entry point for all navigation
+func (ctx *AppContext) ShowPage(pageName string) {
+	// If going to main menu, switch to active tab
+	if pageName == "main_menu" {
+		activePanel := ctx.getActivePanel()
+		if activePanel != nil {
+			ctx.BodyPages.SwitchToPage(activePanel.PanelType)
+			ctx.App.SetFocus(activePanel.List)
+		}
+		return
+	}
+
+	// Check if page already exists
+	if ctx.BodyPages.HasPage(pageName) {
+		ctx.BodyPages.SwitchToPage(pageName)
+		return
+	}
+
+	// Create page using registered creator
+	if creator, exists := ctx.pageCreators[pageName]; exists {
+		page := creator()
+		ctx.BodyPages.AddPage(pageName, page, true, true)
+	}
+}
+
+// RegisterPageCreator - allows external packages to register their pages
+func (ctx *AppContext) RegisterPageCreator(pageName string, creator func() tview.Primitive) {
+	ctx.pageCreators[pageName] = creator
+}
+
+func (ctx *AppContext) GoBackToMainMenu() {
+	ctx.ShowPage("main_menu")
+
+}
 
 func (ctx *AppContext) Run() error {
 	// Set focus to the list right before the application loop kicks off
@@ -255,5 +335,5 @@ func (ctx *AppContext) Run() error {
 			}
 		})
 	}()
-	return ctx.App.SetRoot(ctx.MainGrid, true).EnableMouse(false).Run()
+	return ctx.App.SetRoot(ctx.MainGrid, true).EnableMouse(true).Run()
 }

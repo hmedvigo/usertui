@@ -100,7 +100,7 @@ func NewTabPanel(panelType string, onProceed func(actionIdx int), onCancel func(
 
 	// Active selection color config (Turning from dim grey/green to vibrant phosphor green background)
 	panel.List.SetSelectedTextColor(tcell.ColorBlack)
-	panel.List.SetSelectedBackgroundColor(tcell.ColorGreen)
+	panel.List.SetSelectedBackgroundColor(tcell.ColorLawnGreen)
 
 	// Style Bottom Buttons
 	btnActiveStyle := tcell.StyleDefault.Background(tcell.ColorGreen).Foreground(tcell.ColorBlack)
@@ -128,14 +128,14 @@ func NewTabPanel(panelType string, onProceed func(actionIdx int), onCancel func(
 		AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorBlack), 4, 0, false). // Gap between buttons
 		AddItem(cancelBtn, 12, 0, false).
 		AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorBlack), 0, 1, false) // Flexible right margin spacer
+	titleSpacer := tview.NewBox().SetBackgroundColor(tcell.ColorBlack)
 	// Combine components into the container block
 	titleBox := tview.NewTextView().
-		SetTextColor(tcell.ColorDarkGreen).
-		SetText(config.Title).
-		SetBackgroundColor(tcell.ColorBlack)
-
+		SetTextColor(tcell.ColorLawnGreen).
+		SetText(config.Title)
 	panel.MainFlex.SetBackgroundColor(tcell.ColorBlack)
 	panel.MainFlex.
+		AddItem(titleSpacer, 1, 0, false). // Top spacer
 		AddItem(titleBox, 1, 0, false).
 		AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorBlack), 1, 0, false).
 		AddItem(panel.List, 7, 0, true).                                           // Expanded window height to hold spacer lines
@@ -148,7 +148,7 @@ func getPanelConfig(panelType string) PanelConfig {
 	switch panelType {
 	case "users":
 		return PanelConfig{
-			Title: "User Management Options",
+			Title: " User Management Options",
 			Options: []string{
 				"Create New System User Account",
 				"Modify / Edit Existing User Account",

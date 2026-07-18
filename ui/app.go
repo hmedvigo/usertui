@@ -2,6 +2,8 @@ package ui
 
 import (
 	"usertui/components"
+	"usertui/registry"
+	"usertui/users"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -279,7 +281,7 @@ func (ctx *AppContext) forwardToGroupAction(actionIdx int) {
 // RegisterPage connects a page with its corresponding function
 func (ctx *AppContext) RegisterPage() {
 	ctx.RegisterPageCreator("create_user", func() tview.Primitive {
-		return NewCreateUserPage(ctx).Flex
+		return users.NewCreateUserPage(ctx).Flex
 	})
 	ctx.RegisterPageCreator("edit_user", func() tview.Primitive {
 		return tview.NewBox().SetTitle(" Edit User ").SetBorder(true)
@@ -289,6 +291,9 @@ func (ctx *AppContext) RegisterPage() {
 	})
 	ctx.RegisterPageCreator("view_users", func() tview.Primitive {
 		return tview.NewBox().SetTitle(" View Users ").SetBorder(true)
+	})
+	ctx.RegisterPageCreator("create_group", func() tview.Primitive {
+		return tview.NewBox().SetTitle(" Create Group ").SetBorder(true)
 	})
 }
 
@@ -326,8 +331,8 @@ func (ctx *AppContext) ShowPage(pageName string) {
 }
 
 // RegisterPageCreator - allows external packages to register their pages
-func (ctx *AppContext) RegisterPageCreator(pageName string, creator func() tview.Primitive) {
-	ctx.pageCreators[pageName] = creator
+func (ctx *AppContext) RegisterPageCreator(name string, creator registry.PageCreator) {
+	ctx.pageCreators[name] = creator
 }
 
 func (ctx *AppContext) GoBackToMainMenu() {
